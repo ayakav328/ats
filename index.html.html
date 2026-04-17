@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>応募者管理システム（ATS）</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Yu Gothic','Meiryo',sans-serif;font-size:14px;color:#1a1a1a;background:#f5f5f2;min-height:100vh}
+.header{background:#185FA5;color:#fff;padding:14px 24px;display:flex;align-items:center;gap:12px}
+.header h1{font-size:16px;font-weight:500}
+.header span{font-size:12px;opacity:0.75;margin-left:auto}
+.container{max-width:1100px;margin:0 auto;padding:20px 16px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+.stat{background:#fff;border-radius:8px;border:0.5px solid #e0e0e0;padding:14px;text-align:center}
+.stat-label{font-size:11px;color:#888;margin-bottom:4px}
+.stat-num{font-size:24px;font-weight:500;color:#1a1a1a}
+.save-bar{display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:12px;color:#666;background:#fff;border:0.5px solid #e0e0e0;border-radius:8px;padding:8px 12px}
+.save-dot{width:8px;height:8px;border-radius:50%;background:#3B6D11;flex-shrink:0}
+.save-dot.unsaved{background:#BA7517}
+.toolbar{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.toolbar input[type=text]{flex:1;min-width:160px;height:34px;padding:0 10px;border:0.5px solid #ccc;border-radius:6px;font-size:13px;font-family:inherit}
+.toolbar select{height:34px;padding:0 8px;border:0.5px solid #ccc;border-radius:6px;font-size:13px;font-family:inherit;background:#fff}
+.btn{height:34px;padding:0 14px;border:0.5px solid #ccc;border-radius:6px;background:#fff;color:#1a1a1a;font-size:13px;cursor:pointer;white-space:nowrap;font-family:inherit}
+.btn:hover{background:#f0f0f0}
+.btn-primary{background:#185FA5;color:#fff;border-color:#185FA5}
+.btn-primary:hover{background:#0C447C}
+.btn-danger{color:#A32D2D;border-color:#e0e0e0}
+.btn-danger:hover{background:#FCEBEB}
+.tbl-wrap{overflow-x:auto;border:0.5px solid #e0e0e0;border-radius:10px;background:#fff}
+table{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed}
+th{background:#f8f8f6;padding:9px 10px;text-align:left;font-weight:500;font-size:12px;color:#666;border-bottom:0.5px solid #e0e0e0;white-space:nowrap}
+td{padding:9px 10px;border-bottom:0.5px solid #f0f0f0;vertical-align:middle;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#fafafa}
+.s0{background:#E6F1FB;color:#0C447C}
+.s1{background:#FAEEDA;color:#633806}
+.s2{background:#EAF3DE;color:#27500A}
+.s3{background:#FBEAF0;color:#72243E}
+.s4{background:#FCEBEB;color:#791F1F}
+.status-sel{border:none;cursor:pointer;font-size:11px;font-weight:500;padding:2px 8px;border-radius:20px;font-family:inherit}
+.src-badge{display:inline-block;padding:2px 7px;border-radius:20px;font-size:11px;background:#f0f0f0;color:#555}
+.actions{display:flex;gap:4px}
+.icon-btn{width:28px;height:28px;border:0.5px solid #e0e0e0;border-radius:6px;background:#fff;cursor:pointer;font-size:13px}
+.icon-btn:hover{background:#f0f0f0}
+.empty{text-align:center;padding:2rem;color:#999;font-size:13px}
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:100;align-items:center;justify-content:center}
+.modal-bg.open{display:flex}
+.modal{background:#fff;border-radius:12px;border:0.5px solid #e0e0e0;padding:1.5rem;width:420px;max-width:95vw;max-height:85vh;overflow-y:auto}
+.modal h3{font-size:15px;font-weight:500;margin-bottom:1rem;color:#1a1a1a}
+.form-row{margin-bottom:12px}
+.form-row label{display:block;font-size:12px;color:#666;margin-bottom:4px}
+.form-row input,.form-row select,.form-row textarea{width:100%;padding:7px 10px;border:0.5px solid #ccc;border-radius:6px;font-size:13px;font-family:inherit;color:#1a1a1a}
+.form-row textarea{height:72px;resize:vertical}
+.modal-footer{display:flex;gap:8px;justify-content:flex-end;margin-top:1rem}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#185FA5;color:#fff;padding:9px 20px;border-radius:8px;font-size:13px;z-index:200;opacity:0;transition:opacity 0.3s;pointer-events:none;white-space:nowrap}
+.toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>応募者管理システム（ATS）</h1>
+  <span id="headerDate"></span>
+</div>
+<div class="container">
+  <div class="stats" id="stats"></div>
+  <div class="save-bar">
+    <div class="save-dot" id="saveDot"></div>
+    <span id="saveLabel">読み込み中...</span>
+    <div style="flex:1"></div>
+    <button class="btn" onclick="manualSave()">💾 今すぐ保存</button>
+    <button class="btn btn-danger" onclick="clearAll()">🗑 全データ削除</button>
+  </div>
+  <div class="toolbar">
+    <input type="text" id="search" placeholder="氏名・求人名で検索...">
+    <select id="filterStatus">
+      <option value="">すべてのステータス</option>
+      <option value="書類審査">書類審査</option>
+      <option value="面接調整">面接調整</option>
+      <option value="面接済">面接済</option>
+      <option value="内定">内定</option>
+      <option value="不採用">不採用</option>
+    </select>
+    <select id="filterSrc">
+      <option value="">すべての媒体</option>
+      <option value="Indeed">Indeed</option>
+      <option value="求人ボックス">求人ボックス</option>
+      <option value="自社サイト">自社サイト</option>
+    </select>
+    <button class="btn" onclick="exportCSV()">📥 Excel出力</button>
+    <button class="btn btn-primary" onclick="openAdd()">＋ 応募者追加</button>
+  </div>
+  <div class="tbl-wrap">
+    <table>
+      <colgroup>
+        <col style="width:100px"><col style="width:140px"><col style="width:160px">
+        <col style="width:95px"><col style="width:120px"><col style="width:100px"><col style="width:80px">
+      </colgroup>
+      <thead>
+        <tr>
+          <th>応募日</th><th>氏名</th><th>求人タイトル</th><th>応募媒体</th><th>ステータス</th><th>メモ</th><th>操作</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+  <p id="empty" class="empty" style="display:none">該当する応募者がいません</p>
+</div>
+
+<div class="modal-bg" id="modal">
+  <div class="modal">
+    <h3 id="modalTitle">応募者を追加</h3>
+    <div class="form-row"><label>氏名 *</label><input id="fName" placeholder="例：山田 太郎"></div>
+    <div class="form-row"><label>応募日</label><input id="fDate" type="date"></div>
+    <div class="form-row"><label>求人タイトル</label><input id="fJob" placeholder="例：電話占い師 募集"></div>
+    <div class="form-row"><label>応募媒体</label>
+      <select id="fSrc"><option>Indeed</option><option>求人ボックス</option><option>自社サイト</option><option>その他</option></select>
+    </div>
+    <div class="form-row"><label>ステータス</label>
+      <select id="fStatus"><option>書類審査</option><option>面接調整</option><option>面接済</option><option>内定</option><option>不採用</option></select>
+    </div>
+    <div class="form-row"><label>メモ</label><textarea id="fNote" placeholder="備考・連絡事項など"></textarea></div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal()">キャンセル</button>
+      <button class="btn btn-primary" onclick="saveApplicant()">保存</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const STORAGE_KEY = 'ats_applicants_v1';
+const STATUSES = ['書類審査','面接調整','面接済','内定','不採用'];
+const S_CLASS = ['s0','s1','s2','s3','s4'];
+let data = [], nextId = 1, editId = null, autoSaveTimer = null;
+
+document.getElementById('headerDate').textContent = new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'});
+
+function loadData(){
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(raw){
+      const p = JSON.parse(raw);
+      data = p.data || [];
+      nextId = p.nextId || (data.length ? Math.max(...data.map(d=>d.id))+1 : 1);
+      setSaved(true, p.savedAt);
+      showToast('保存済みデータを読み込みました（' + data.length + '件）');
+    } else {
+      data = [];
+      nextId = 1;
+      persistData();
+      setSaved(true);
+    }
+  } catch(e){ data = []; setSaved(false); }
+}
+
+function persistData(){
+  try {
+    const savedAt = new Date().toISOString();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({data, nextId, savedAt}));
+    setSaved(true, savedAt);
+  } catch(e){ showToast('保存失敗：ストレージ容量不足の可能性があります'); }
+}
+
+function scheduleAutoSave(){
+  setSaved(false);
+  clearTimeout(autoSaveTimer);
+  autoSaveTimer = setTimeout(()=>{ persistData(); showToast('自動保存しました'); }, 1500);
+}
+
+function setSaved(saved, savedAt){
+  const dot = document.getElementById('saveDot');
+  const label = document.getElementById('saveLabel');
+  if(saved){
+    dot.className = 'save-dot';
+    if(savedAt){
+      const d = new Date(savedAt);
+      label.textContent = '最終保存：' + d.toLocaleDateString('ja-JP') + ' ' + d.toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+    } else { label.textContent = '保存済み'; }
+  } else {
+    dot.className = 'save-dot unsaved';
+    label.textContent = '未保存の変更があります...';
+  }
+}
+
+function manualSave(){ persistData(); showToast('保存しました'); }
+
+function clearAll(){
+  if(!confirm('すべてのデータを削除します。この操作は取り消せません。よろしいですか？')) return;
+  data = []; nextId = 1;
+  persistData(); renderStats(); renderTable();
+  showToast('全データを削除しました');
+}
+
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2500);
+}
+
+function sClass(s){ return S_CLASS[STATUSES.indexOf(s)] || 's0'; }
+
+function renderStats(){
+  const total = data.length;
+  const active = data.filter(d=>d.status!=='内定'&&d.status!=='不採用').length;
+  const hired = data.filter(d=>d.status==='内定').length;
+  const indeed = data.filter(d=>d.src==='Indeed').length;
+  document.getElementById('stats').innerHTML = `
+    <div class="stat"><div class="stat-label">総応募数</div><div class="stat-num">${total}</div></div>
+    <div class="stat"><div class="stat-label">選考中</div><div class="stat-num">${active}</div></div>
+    <div class="stat"><div class="stat-label">内定</div><div class="stat-num">${hired}</div></div>
+    <div class="stat"><div class="stat-label">Indeed経由</div><div class="stat-num">${indeed}</div></div>
+  `;
+}
+
+function renderTable(){
+  const q = document.getElementById('search').value.toLowerCase();
+  const fs = document.getElementById('filterStatus').value;
+  const fc = document.getElementById('filterSrc').value;
+  const rows = data.filter(d=>{
+    if(q && !d.name.toLowerCase().includes(q) && !d.job.toLowerCase().includes(q)) return false;
+    if(fs && d.status!==fs) return false;
+    if(fc && d.src!==fc) return false;
+    return true;
+  });
+  document.getElementById('tbody').innerHTML = rows.map(d=>`
+    <tr>
+      <td>${d.date}</td>
+      <td style="font-weight:500">${d.name}</td>
+      <td title="${d.job}">${d.job.length>14?d.job.slice(0,14)+'…':d.job}</td>
+      <td><span class="src-badge">${d.src}</span></td>
+      <td>
+        <select class="status-sel ${sClass(d.status)}" onchange="changeStatus(${d.id},this.value)">
+          ${STATUSES.map(s=>`<option value="${s}" ${s===d.status?'selected':''}>${s}</option>`).join('')}
+        </select>
+      </td>
+      <td title="${d.note}" style="color:#888">${d.note.length>14?d.note.slice(0,14)+'…':d.note}</td>
+      <td><div class="actions">
+        <button class="icon-btn" title="編集" onclick="openEdit(${d.id})">✏️</button>
+        <button class="icon-btn" title="削除" onclick="deleteRow(${d.id})">🗑</button>
+      </div></td>
+    </tr>
+  `).join('');
+  document.getElementById('empty').style.display = rows.length ? 'none' : 'block';
+}
+
+function changeStatus(id,val){
+  const d=data.find(x=>x.id===id);
+  if(d){ d.status=val; renderStats(); renderTable(); scheduleAutoSave(); }
+}
+
+function deleteRow(id){
+  if(!confirm('この応募者を削除しますか？')) return;
+  data=data.filter(x=>x.id!==id);
+  renderStats(); renderTable(); scheduleAutoSave();
+}
+
+function openAdd(){
+  editId=null;
+  document.getElementById('modalTitle').textContent='応募者を追加';
+  document.getElementById('fName').value='';
+  document.getElementById('fDate').value=new Date().toISOString().slice(0,10);
+  document.getElementById('fJob').value='';
+  document.getElementById('fSrc').value='Indeed';
+  document.getElementById('fStatus').value='書類審査';
+  document.getElementById('fNote').value='';
+  document.getElementById('modal').classList.add('open');
+}
+
+function openEdit(id){
+  const d=data.find(x=>x.id===id);
+  if(!d) return;
+  editId=id;
+  document.getElementById('modalTitle').textContent='応募者を編集';
+  document.getElementById('fName').value=d.name;
+  document.getElementById('fDate').value=d.date;
+  document.getElementById('fJob').value=d.job;
+  document.getElementById('fSrc').value=d.src;
+  document.getElementById('fStatus').value=d.status;
+  document.getElementById('fNote').value=d.note;
+  document.getElementById('modal').classList.add('open');
+}
+
+function closeModal(){ document.getElementById('modal').classList.remove('open'); }
+
+function saveApplicant(){
+  const name=document.getElementById('fName').value.trim();
+  if(!name){ alert('氏名を入力してください'); return; }
+  const obj={
+    id: editId||nextId++,
+    date: document.getElementById('fDate').value,
+    name,
+    job: document.getElementById('fJob').value.trim(),
+    src: document.getElementById('fSrc').value,
+    status: document.getElementById('fStatus').value,
+    note: document.getElementById('fNote').value.trim()
+  };
+  if(editId){ data=data.map(x=>x.id===editId?obj:x); }
+  else{ data.push(obj); }
+  closeModal(); renderStats(); renderTable(); scheduleAutoSave();
+}
+
+function exportCSV(){
+  const header=['応募日','氏名','求人タイトル','応募媒体','ステータス','メモ'];
+  const rows=data.map(d=>[d.date,d.name,d.job,d.src,d.status,d.note]);
+  const bom='\uFEFF';
+  const csv=bom+[header,...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+  a.download='応募者管理_'+new Date().toISOString().slice(0,10)+'.csv';
+  a.click();
+}
+
+document.getElementById('search').addEventListener('input', renderTable);
+document.getElementById('filterStatus').addEventListener('change', renderTable);
+document.getElementById('filterSrc').addEventListener('change', renderTable);
+document.getElementById('modal').addEventListener('click', e=>{ if(e.target===document.getElementById('modal')) closeModal(); });
+
+loadData(); renderStats(); renderTable();
+</script>
+</body>
+</html>
